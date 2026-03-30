@@ -63,3 +63,11 @@ class SessionLogger:
             f.write(f"--- {ts} 要約 ---\n")
             f.write(f"{summary}\n")
             f.write("---\n\n")
+
+    def log_whisper_hint(self, prompt_en: str) -> None:
+        """Whisper用英語ヒントをログファイルに記録する."""
+        ts = self.elapsed()
+        with self._path.open("a", encoding="utf-8") as f:
+            f.write(f"--- {ts} whisper_hint ---\n")
+            f.write(f"{prompt_en}\n")
+            f.write("---\n\n")

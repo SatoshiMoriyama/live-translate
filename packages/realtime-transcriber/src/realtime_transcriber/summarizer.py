@@ -146,6 +146,8 @@ class Summarizer:
             if prompt_en:
                 self._prompt_en = prompt_en[:400]
         self._session_logger.log_summary(summary_ja)
+        if prompt_en:
+            self._session_logger.log_whisper_hint(prompt_en[:400])
 
         # ターミナルに要約を表示
         print("\n\033[96m--- 要約 ---\033[0m", flush=True)
