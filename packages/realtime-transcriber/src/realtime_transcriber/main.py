@@ -8,6 +8,7 @@ import logging
 import re
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 import sounddevice as sd
@@ -123,17 +124,22 @@ def main() -> None:
                     context_parts.append(s)
                     char_count += len(s)
                 prev_text = " ".join(reversed(context_parts))
-                for sentence in sentences:
+
+                def _translate_one(s: str) -> str:
                     try:
-                        ja_text = translate_text(
-                            text=sentence,
+                        return translate_text(
+                            text=s,
                             source_lang="en",
                             target_lang="ja",
                             client=translate_client,
                         )
                     except Exception:
                         logger.exception("Translation failed")
-                        ja_text = "(翻訳失敗)"
+                        return "(翻訳失敗)"
+
+                with ThreadPoolExecutor(max_workers=len(sentences)) as pool:
+                    translated = list(pool.map(_translate_one, sentences))
+                for sentence, ja_text in zip(sentences, translated):
                     print(f"\033[90m  {sentence}\033[0m", flush=True)
                     print(f"  {ja_text}", flush=True)
                 print("", flush=True)
