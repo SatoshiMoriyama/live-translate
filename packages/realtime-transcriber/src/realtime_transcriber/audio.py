@@ -124,9 +124,10 @@ class AudioCapture:
 
         # VADウィンドウサイズ単位で処理
         result = None
-        while len(self._mono_buffer) >= self._window_size:
-            window = self._mono_buffer[: self._window_size]
-            self._mono_buffer = self._mono_buffer[self._window_size :]
+        offset = 0
+        while len(self._mono_buffer) - offset >= self._window_size:
+            window = self._mono_buffer[offset : offset + self._window_size]
+            offset += self._window_size
 
             prob = self._vad.process(window.tobytes())
             is_speech = prob >= VAD_THRESHOLD
@@ -162,6 +163,7 @@ class AudioCapture:
                 result = self._finalize_speech()
                 break
 
+        self._mono_buffer = self._mono_buffer[offset:]
         return result
 
     def _finalize_speech(self) -> np.ndarray | None:

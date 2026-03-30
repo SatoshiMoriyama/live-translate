@@ -34,7 +34,7 @@ def _has_repetition(text: str, min_repeats: int = 5) -> bool:
     return match is not None
 
 
-def clean_repetition(text: str) -> str:
+def _clean_repetition(text: str) -> str:
     """テキストから異常な繰り返し部分を除去する."""
     # 同じ単語の5回以上の連続を1回に置換
     cleaned = re.sub(r"\b(\w+)(?:\s+\1){4,}", r"\1", text)
@@ -50,7 +50,7 @@ def is_hallucination(text: str) -> bool:
         return True
     # 繰り返しが大半を占める場合はハルシネーション
     if _has_repetition(normalized):
-        cleaned = clean_repetition(normalized)
+        cleaned = _clean_repetition(normalized)
         if len(cleaned) < len(normalized) * 0.3:
             return True
     return False

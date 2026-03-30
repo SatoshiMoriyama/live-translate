@@ -4,9 +4,10 @@ AWS Translateによる英日翻訳を担当する。
 """
 
 import boto3
+import botocore.client
 
 
-def create_translate_client(region: str = "ap-northeast-1") -> boto3.client:
+def create_translate_client(region: str = "ap-northeast-1") -> botocore.client.BaseClient:
     """AWS Translateクライアントを生成する."""
     return boto3.client("translate", region_name=region)
 
@@ -15,7 +16,7 @@ def translate_text(
     text: str,
     source_lang: str,
     target_lang: str,
-    client: boto3.client,
+    client: botocore.client.BaseClient,
 ) -> str:
     """AWS Translateでテキストを翻訳する.
 
