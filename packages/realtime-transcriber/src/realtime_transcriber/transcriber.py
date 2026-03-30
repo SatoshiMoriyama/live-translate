@@ -37,13 +37,18 @@ def _has_repetition(text: str, min_repeats: int = 5) -> bool:
     # 同じ文字が連続で繰り返されるパターン（例: "llllllllll"）
     if re.search(r"(.)\1{9,}", text):
         return True
+    # 同じ2〜6文字のパターンが5回以上繰り返される（例: "結論の結論の結論の..."）
+    if re.search(r"(.{2,6})\1{4,}", text):
+        return True
     return False
 
 
 def _clean_repetition(text: str) -> str:
     """テキストから異常な繰り返し部分を除去する."""
+    # 同じ2〜6文字のパターンの5回以上の連続を1回に置換
+    cleaned = re.sub(r"(.{2,6})\1{4,}", r"\1", text)
     # 同じ文字の10回以上の連続を1文字に置換（例: "lllllll" → "l"）
-    cleaned = re.sub(r"(.)\1{9,}", r"\1", text)
+    cleaned = re.sub(r"(.)\1{9,}", r"\1", cleaned)
     # 同じ単語の5回以上の連続を1回に置換
     cleaned = re.sub(r"\b(\w+)(?:\s+\1){4,}", r"\1", cleaned)
     return cleaned.strip()
@@ -60,10 +65,10 @@ def is_hallucination(text: str) -> bool:
     if normalized in HALLUCINATION_PATTERNS:
         return True
     # 繰り返しが大半を占める場合はハルシネーション
-    # （例: "too too too too too too" → 除去後が元の30%未満ならハルシネーション）
+    # （例: "too too too too too too" → 除去後が元の50%未満ならハルシネーション）
     if _has_repetition(normalized):
         cleaned = _clean_repetition(normalized)
-        if len(cleaned) < len(normalized) * 0.3:
+        if len(cleaned) < len(normalized) * 0.5:
             return True
     return False
 
@@ -91,4 +96,8 @@ def transcribe_audio(
         language=language,
         initial_prompt=initial_prompt,
     )
-    return result["text"]
+    text = result["text"]
+    # 繰り返しパターンが含まれていれば除去してから返す
+    if _has_repetition(text):
+        text = _clean_repetition(text)
+    return text

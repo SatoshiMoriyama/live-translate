@@ -30,6 +30,8 @@ SLEEP_SECONDS = 0.05
 MAX_PENDING_SECONDS = 15
 # prev_text（Whisperコンテキスト）に保持する最大文字数
 MAX_CONTEXT_CHARS = 200
+# initial_prompt 全体の最大文字数（Whisperは約224トークンが上限）
+MAX_PROMPT_CHARS = 400
 
 # --- ANSIエスケープ ---
 _DIM = "\033[90m"  # グレー文字（原文表示用）
@@ -177,11 +179,12 @@ def main() -> None:
                 duration = len(chunk) / SAMPLE_RATE
 
                 # 要約をドメインヒントとして活用し、認識精度を向上させる
+                # Whisperは長すぎるプロンプトで不安定になるため長さを制限
                 summary_hint = summarizer.latest_summary
                 if summary_hint and prev_text:
-                    initial_prompt = summary_hint + " " + prev_text
+                    initial_prompt = summary_hint[:MAX_PROMPT_CHARS - len(prev_text) - 1] + " " + prev_text
                 else:
-                    initial_prompt = summary_hint or prev_text or None
+                    initial_prompt = (summary_hint or prev_text or "")[:MAX_PROMPT_CHARS] or None
 
                 text = transcribe_audio(
                     audio=chunk,
