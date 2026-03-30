@@ -1,45 +1,24 @@
 """音声キャプチャモジュール.
 
 sounddeviceによるBlackHole 2chからの音声取得と前処理を担当する。
+VADによる発話区間検出で自然な文の区切りで音声を返す。
 """
 
 import queue
 from types import ModuleType, TracebackType
 
 import numpy as np
+from silero_vad_lite import SileroVAD
 
-SILENCE_RMS_THRESHOLD = 0.0005
-
-
-def is_silent(audio: np.ndarray, threshold: float = SILENCE_RMS_THRESHOLD) -> bool:
-    """音声データのRMSレベルが閾値以下かどうかを判定する.
-
-    Args:
-        audio: モノラルfloat32のnumpy配列
-        threshold: RMS閾値（この値以下なら無音と判定）
-
-    Returns:
-        無音ならTrue
-    """
-    rms = float(np.sqrt(np.mean(audio**2)))
-    return rms <= threshold
+# VAD設定
+VAD_THRESHOLD = 0.5
+MIN_SILENCE_MS = 800
+MAX_SPEECH_SECONDS = 30
+MIN_SPEECH_SECONDS = 1
 
 
 def find_device(name: str, sd_module: ModuleType) -> int:
-    """デバイス名で入力デバイスを検索し、インデックスを返す.
-
-    部分一致で検索し、入力チャンネルを持つデバイスのみ対象とする。
-
-    Args:
-        name: 検索するデバイス名（部分一致）
-        sd_module: sounddeviceモジュール（テスト時にモック可能）
-
-    Returns:
-        デバイスインデックス
-
-    Raises:
-        RuntimeError: デバイスが見つからない場合
-    """
+    """デバイス名で入力デバイスを検索し、インデックスを返す."""
     devices = sd_module.query_devices()
     for index, device in enumerate(devices):
         if name in device["name"] and device["max_input_channels"] > 0:
@@ -50,26 +29,38 @@ def find_device(name: str, sd_module: ModuleType) -> int:
 
 
 class AudioCapture:
-    """sounddeviceを使った音声キャプチャ.
+    """VADベースの音声キャプチャ.
 
-    コンテキストマネージャとして使用し、ストリームのライフサイクルを管理する。
+    発話開始を検出してバッファリングし、無音区間で区切って返す。
     """
 
     def __init__(
         self,
         device_name: str,
         sample_rate: int,
-        buffer_seconds: int,
         sd_module: ModuleType,
     ) -> None:
         self._sd = sd_module
         self._device_index = find_device(device_name, sd_module)
         self.sample_rate = sample_rate
-        self.buffer_seconds = buffer_seconds
-        self._required_samples = sample_rate * buffer_seconds
         self._queue: queue.Queue[np.ndarray] = queue.Queue()
-        self._pending_chunks: list[np.ndarray] = []
         self._stream = None
+
+        # VAD
+        self._vad = SileroVAD(sample_rate)
+        self._window_size = self._vad.window_size_samples
+
+        # 発話状態管理
+        self._in_speech = False
+        self._speech_chunks: list[np.ndarray] = []
+        self._silence_samples = 0
+        self._speech_samples = 0
+        self._min_silence_samples = int(sample_rate * MIN_SILENCE_MS / 1000)
+        self._max_speech_samples = int(sample_rate * MAX_SPEECH_SECONDS)
+        self._min_speech_samples = int(sample_rate * MIN_SPEECH_SECONDS)
+
+        # モノラル変換用の未処理バッファ
+        self._mono_buffer = np.array([], dtype=np.float32)
 
     def __enter__(self) -> "AudioCapture":
         self._stream = self._sd.InputStream(
@@ -99,31 +90,75 @@ class AudioCapture:
         time_info: object,
         status: object,
     ) -> None:
-        """sounddevice InputStreamコールバック. データをコピーしてキューに追加する."""
+        """sounddevice InputStreamコールバック."""
         self._queue.put(indata.copy())
-
-    def get_audio_chunk(self) -> np.ndarray | None:
-        """キューから音声を取り出し、モノラルfloat32配列として返す.
-
-        バッファが必要サンプル数に達していなければNoneを返す。
-
-        Returns:
-            モノラルfloat32のnumpy配列、またはデータ不足時にNone
-        """
-        while not self._queue.empty():
-            self._pending_chunks.append(self._queue.get_nowait())
-
-        total_samples = sum(c.shape[0] for c in self._pending_chunks)
-        if total_samples < self._required_samples:
-            return None
-
-        concatenated = np.concatenate(self._pending_chunks, axis=0)
-        self._pending_chunks.clear()
-
-        return self._to_mono(concatenated)
 
     def _to_mono(self, audio: np.ndarray) -> np.ndarray:
         """ステレオ音声をモノラルに変換する."""
         if audio.ndim == 2:
             return np.mean(audio, axis=1).astype(np.float32)
         return audio.astype(np.float32)
+
+    def get_audio_chunk(self) -> np.ndarray | None:
+        """VADで発話区間を検出し、発話終了時にまとめて返す.
+
+        Returns:
+            発話区間のモノラルfloat32配列、またはまだ発話中/無音時にNone
+        """
+        # キューからデータを取り出してモノラルに変換
+        while not self._queue.empty():
+            stereo = self._queue.get_nowait()
+            mono = self._to_mono(stereo)
+            self._mono_buffer = np.concatenate([self._mono_buffer, mono])
+
+        # VADウィンドウサイズ単位で処理
+        result = None
+        while len(self._mono_buffer) >= self._window_size:
+            window = self._mono_buffer[: self._window_size]
+            self._mono_buffer = self._mono_buffer[self._window_size :]
+
+            prob = self._vad.process(window.tobytes())
+            is_speech = prob >= VAD_THRESHOLD
+
+            if is_speech:
+                if not self._in_speech:
+                    self._in_speech = True
+                    self._silence_samples = 0
+                    self._speech_samples = 0
+                self._speech_chunks.append(window)
+                self._speech_samples += self._window_size
+                self._silence_samples = 0
+            elif self._in_speech:
+                # 発話中の無音
+                self._speech_chunks.append(window)
+                self._silence_samples += self._window_size
+                self._speech_samples += self._window_size
+
+                # 無音が十分続いたら発話終了
+                if self._silence_samples >= self._min_silence_samples:
+                    result = self._finalize_speech()
+                    break
+
+            # 最大長に達したら強制区切り
+            if self._in_speech and self._speech_samples >= self._max_speech_samples:
+                result = self._finalize_speech()
+                break
+
+        return result
+
+    def _finalize_speech(self) -> np.ndarray | None:
+        """蓄積した発話チャンクを結合して返す."""
+        if not self._speech_chunks:
+            return None
+
+        audio = np.concatenate(self._speech_chunks)
+        self._speech_chunks.clear()
+        self._in_speech = False
+        self._silence_samples = 0
+        self._speech_samples = 0
+
+        # 短すぎる発話は無視
+        if len(audio) < self._min_speech_samples:
+            return None
+
+        return audio

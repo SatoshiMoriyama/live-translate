@@ -2,11 +2,13 @@
 name = "realtime-transcriber"
 version = "0.1.0"
 description = "BlackHole 2ch経由のシステム音声をMLX-Whisperでリアルタイム文字起こしするCLIツール"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 dependencies = [
     "sounddevice",
     "mlx-whisper",
     "numpy",
+    "boto3",
+    "silero-vad-lite",
 ]
 
 [project.scripts]
