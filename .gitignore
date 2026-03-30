@@ -210,3 +210,6 @@ blog_content/*.webp
 
 # Python cache
 __pycache__/
+
+# Takt run data
+.takt/
