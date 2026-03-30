@@ -5,6 +5,7 @@ VADによる発話区間検出で自然な文の区切りで音声を返す。
 """
 
 import queue
+from collections import deque
 from types import ModuleType, TracebackType
 
 import numpy as np
@@ -12,7 +13,7 @@ from silero_vad_lite import SileroVAD
 
 # VAD設定
 VAD_THRESHOLD = 0.5
-MIN_SILENCE_MS = 600
+MIN_SILENCE_MS = 800
 MAX_SPEECH_SECONDS = 30
 MIN_SPEECH_SECONDS = 1
 
@@ -60,7 +61,8 @@ class AudioCapture:
         self._min_speech_samples = int(sample_rate * MIN_SPEECH_SECONDS)
         self._last_status = ""
 
-        # モノラル変換用の未処理バッファ
+        # モノラル変換用の未処理バッファ（dequeで蓄積し処理時に結合）
+        self._mono_chunks: deque[np.ndarray] = deque()
         self._mono_buffer = np.array([], dtype=np.float32)
 
     def __enter__(self) -> "AudioCapture":
@@ -106,11 +108,19 @@ class AudioCapture:
         Returns:
             発話区間のモノラルfloat32配列、またはまだ発話中/無音時にNone
         """
-        # キューからデータを取り出してモノラルに変換
-        while not self._queue.empty():
-            stereo = self._queue.get_nowait()
-            mono = self._to_mono(stereo)
-            self._mono_buffer = np.concatenate([self._mono_buffer, mono])
+        # キューからデータを取り出してモノラルに変換（dequeに蓄積）
+        while True:
+            try:
+                stereo = self._queue.get_nowait()
+            except queue.Empty:
+                break
+            self._mono_chunks.append(self._to_mono(stereo))
+
+        # 蓄積したチャンクをまとめてバッファに結合
+        if self._mono_chunks:
+            self._mono_chunks.appendleft(self._mono_buffer)
+            self._mono_buffer = np.concatenate(self._mono_chunks)
+            self._mono_chunks.clear()
 
         # VADウィンドウサイズ単位で処理
         result = None
@@ -163,6 +173,11 @@ class AudioCapture:
             return None
 
         audio = np.concatenate(self._speech_chunks)
+
+        # 末尾の無音部分をトリムしてWhisperの処理を効率化
+        if self._silence_samples > 0 and self._silence_samples < len(audio):
+            audio = audio[: -self._silence_samples]
+
         self._speech_chunks.clear()
         self._in_speech = False
         self._silence_samples = 0
