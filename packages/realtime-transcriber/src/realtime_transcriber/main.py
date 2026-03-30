@@ -16,6 +16,7 @@ import sounddevice as sd
 import mlx_whisper
 
 from realtime_transcriber.audio import AudioCapture
+from realtime_transcriber.session_logger import SessionLogger
 from realtime_transcriber.transcriber import is_hallucination, transcribe_audio
 from realtime_transcriber.translator import create_translate_client, translate_text
 
@@ -128,11 +129,16 @@ def _translate_sentences(
         return list(pool.map(_translate_one, sentences))
 
 
-def _print_results(sentences: list[str], translated: list[str]) -> None:
-    """原文（グレー）と翻訳文を1文ずつ表示する."""
+def _print_results(
+    sentences: list[str],
+    translated: list[str],
+    session_logger: SessionLogger,
+) -> None:
+    """原文（グレー）と翻訳文を1文ずつ表示し、ログに記録する."""
     for sentence, ja_text in zip(sentences, translated):
         print(f"{_DIM}  {sentence}{_RESET}", flush=True)
         print(f"  {ja_text}", flush=True)
+        session_logger.log(sentence, ja_text)
     print("", flush=True)
 
 
@@ -143,6 +149,8 @@ def main() -> None:
     """メインループ. 音声キャプチャ→文字起こし→翻訳→表示を繰り返す."""
     _check_audio_output()
     translate_client = create_translate_client()
+    session_logger = SessionLogger()
+    print(f"Log: {session_logger.path}")
     prev_text = ""
     pending_audio: np.ndarray | None = None
 
@@ -185,6 +193,6 @@ def main() -> None:
                 sentences = _split_sentences(text)
                 prev_text = _build_context(sentences)
                 translated = _translate_sentences(sentences, translate_client)
-                _print_results(sentences, translated)
+                _print_results(sentences, translated, session_logger)
         except KeyboardInterrupt:
             pass
