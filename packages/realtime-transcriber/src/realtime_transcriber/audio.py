@@ -11,11 +11,11 @@ from types import ModuleType, TracebackType
 import numpy as np
 from silero_vad_lite import SileroVAD
 
-# VAD設定
-VAD_THRESHOLD = 0.5
-MIN_SILENCE_MS = 800
-MAX_SPEECH_SECONDS = 30
-MIN_SPEECH_SECONDS = 1
+# --- VAD設定 ---
+VAD_THRESHOLD = 0.5  # 発話判定の確率しきい値（0.0〜1.0）
+MIN_SILENCE_MS = 800  # 発話終了とみなす無音の長さ（ミリ秒）
+MAX_SPEECH_SECONDS = 30  # 1回の発話として蓄積する最大秒数
+MIN_SPEECH_SECONDS = 1  # これより短い発話はノイズとして無視
 
 
 def find_device(name: str, sd_module: ModuleType) -> int:
@@ -47,11 +47,11 @@ class AudioCapture:
         self._queue: queue.Queue[np.ndarray] = queue.Queue()
         self._stream = None
 
-        # VAD
+        # VAD（Voice Activity Detection: 音声区間検出）
         self._vad = SileroVAD(sample_rate)
-        self._window_size = self._vad.window_size_samples
+        self._window_size = self._vad.window_size_samples  # VADが1回に処理するサンプル数
 
-        # 発話状態管理
+        # 発話状態管理（発話中かどうか、蓄積した音声チャンク、無音/発話の累計サンプル数）
         self._in_speech = False
         self._speech_chunks: list[np.ndarray] = []
         self._silence_samples = 0
@@ -93,7 +93,7 @@ class AudioCapture:
         time_info: object,
         status: object,
     ) -> None:
-        """sounddevice InputStreamコールバック."""
+        """sounddevice InputStreamコールバック（別スレッドから呼ばれる）."""
         self._queue.put(indata.copy())
 
     def _to_mono(self, audio: np.ndarray) -> np.ndarray:

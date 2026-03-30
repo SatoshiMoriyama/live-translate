@@ -8,8 +8,10 @@ from types import ModuleType
 
 import numpy as np
 
+# Apple Silicon向けに最適化されたWhisperモデル
 MODEL_REPO = "mlx-community/whisper-large-v3-turbo"
 
+# Whisperが無音や短い音声に対して出力しがちな定型フレーズ
 HALLUCINATION_PATTERNS = frozenset(
     {
         "thank you.",
@@ -49,6 +51,7 @@ def is_hallucination(text: str) -> bool:
     if normalized in HALLUCINATION_PATTERNS:
         return True
     # 繰り返しが大半を占める場合はハルシネーション
+    # （例: "too too too too too too" → 除去後が元の30%未満ならハルシネーション）
     if _has_repetition(normalized):
         cleaned = _clean_repetition(normalized)
         if len(cleaned) < len(normalized) * 0.3:
