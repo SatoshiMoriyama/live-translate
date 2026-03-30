@@ -12,7 +12,7 @@ from silero_vad_lite import SileroVAD
 
 # VAD設定
 VAD_THRESHOLD = 0.5
-MIN_SILENCE_MS = 800
+MIN_SILENCE_MS = 600
 MAX_SPEECH_SECONDS = 30
 MIN_SPEECH_SECONDS = 1
 
@@ -58,6 +58,7 @@ class AudioCapture:
         self._min_silence_samples = int(sample_rate * MIN_SILENCE_MS / 1000)
         self._max_speech_samples = int(sample_rate * MAX_SPEECH_SECONDS)
         self._min_speech_samples = int(sample_rate * MIN_SPEECH_SECONDS)
+        self._last_status = ""
 
         # モノラル変換用の未処理バッファ
         self._mono_buffer = np.array([], dtype=np.float32)
@@ -128,6 +129,13 @@ class AudioCapture:
                 self._speech_chunks.append(window)
                 self._speech_samples += self._window_size
                 self._silence_samples = 0
+
+                # 秒単位で変わった時だけ更新
+                elapsed = int(self._speech_samples / self.sample_rate)
+                status = f"\r\033[93m● Recording... {elapsed}s\033[0m"
+                if status != self._last_status:
+                    print(status, end="", flush=True)
+                    self._last_status = status
             elif self._in_speech:
                 # 発話中の無音
                 self._speech_chunks.append(window)
@@ -148,6 +156,9 @@ class AudioCapture:
 
     def _finalize_speech(self) -> np.ndarray | None:
         """蓄積した発話チャンクを結合して返す."""
+        print("\r\033[K", end="", flush=True)  # 録音中表示をクリア
+        self._last_status = ""
+
         if not self._speech_chunks:
             return None
 
