@@ -61,6 +61,7 @@ class Summarizer:
         self._session_logger = session_logger
         self._client = boto3.client("bedrock-runtime", region_name=BEDROCK_REGION)
         self._prev_summary = ""
+        self._lock = threading.Lock()
         self._running = False
         self._thread: threading.Thread | None = None
 
@@ -69,6 +70,12 @@ class Summarizer:
         self._running = True
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
+
+    @property
+    def latest_summary(self) -> str:
+        """最新の要約テキストを返す（スレッドセーフ）."""
+        with self._lock:
+            return self._prev_summary
 
     def stop(self) -> None:
         """要約ワーカーを停止する."""
@@ -95,7 +102,8 @@ class Summarizer:
             logger.exception("Summary generation failed")
             return
 
-        self._prev_summary = summary
+        with self._lock:
+            self._prev_summary = summary
         self._session_logger.log_summary(summary)
 
         # ターミナルに要約を表示

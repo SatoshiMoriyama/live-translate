@@ -176,11 +176,18 @@ def main() -> None:
 
                 duration = len(chunk) / SAMPLE_RATE
 
+                # 要約をドメインヒントとして活用し、認識精度を向上させる
+                summary_hint = summarizer.latest_summary
+                if summary_hint and prev_text:
+                    initial_prompt = summary_hint + " " + prev_text
+                else:
+                    initial_prompt = summary_hint or prev_text or None
+
                 text = transcribe_audio(
                     audio=chunk,
                     language=LANGUAGE,
                     mlx_whisper_module=mlx_whisper,
-                    initial_prompt=prev_text or None,
+                    initial_prompt=initial_prompt,
                 )
                 if not text or is_hallucination(text):
                     continue
