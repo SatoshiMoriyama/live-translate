@@ -5,12 +5,13 @@ AudioCapture → transcribe_audio → print のパイプラインを制御する
 
 import time
 
+import numpy as np
 import sounddevice as sd
 
 import mlx_whisper
 
-from realtime_transcriber.audio import AudioCapture
-from realtime_transcriber.transcriber import transcribe_audio
+from realtime_transcriber.audio import AudioCapture, is_silent
+from realtime_transcriber.transcriber import is_hallucination, transcribe_audio
 
 DEVICE_NAME = "BlackHole 2ch"
 SAMPLE_RATE = 16000
@@ -34,12 +35,19 @@ def main() -> None:
                     time.sleep(SLEEP_SECONDS)
                     continue
 
+                if is_silent(chunk):
+                    print(
+                        f"[DEBUG] silent skip (rms={float(np.sqrt(np.mean(chunk**2))):.6f})",
+                        flush=True,
+                    )
+                    continue
+
                 text = transcribe_audio(
                     audio=chunk,
                     language=LANGUAGE,
                     mlx_whisper_module=mlx_whisper,
                 )
-                if text:
+                if text and not is_hallucination(text):
                     print(text, flush=True)
         except KeyboardInterrupt:
             pass

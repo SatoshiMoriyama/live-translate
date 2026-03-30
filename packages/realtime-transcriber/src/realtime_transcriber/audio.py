@@ -11,7 +11,7 @@ import numpy as np
 SILENCE_RMS_THRESHOLD = 0.0005
 
 
-def is_silent(audio: np.ndarray, threshold: float) -> bool:
+def is_silent(audio: np.ndarray, threshold: float = SILENCE_RMS_THRESHOLD) -> bool:
     """音声データのRMSレベルが閾値以下かどうかを判定する.
 
     Args:

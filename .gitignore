@@ -207,3 +207,6 @@ blog_content/*.webp
 
 # Python virtual environments
 .venv
+
+# Python cache
+__pycache__/
