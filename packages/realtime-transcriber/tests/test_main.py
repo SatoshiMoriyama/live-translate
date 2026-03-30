@@ -118,6 +118,10 @@ def _patch_main_deps(**overrides):
             "realtime_transcriber.main.create_translate_client",
             return_value=MagicMock(),
         ),
+        "Summarizer": patch(
+            "realtime_transcriber.main.Summarizer",
+            return_value=MagicMock(),
+        ),
     }
     patches.update(overrides)
 

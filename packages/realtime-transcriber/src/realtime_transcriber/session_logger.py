@@ -2,6 +2,7 @@
 
 起動ごとにログファイルを作成し、文字起こし・翻訳結果をタイムスタンプ付きで記録する。
 ログは logs/ ディレクトリに保存される。
+要約機能のために、前回要約以降のテキストを取得する機能も持つ。
 """
 
 from datetime import datetime
@@ -24,6 +25,8 @@ class SessionLogger:
             f"# Session started at {self._start_time.strftime('%Y-%m-%d %H:%M:%S')}\n\n",
             encoding="utf-8",
         )
+        # 要約用: 前回の要約以降に蓄積された翻訳テキスト
+        self._recent_entries: list[str] = []
 
     @property
     def path(self) -> Path:
@@ -43,3 +46,19 @@ class SessionLogger:
         with self._path.open("a", encoding="utf-8") as f:
             f.write(f"{ts} {sentence}\n")
             f.write(f"{ts} {translated}\n\n")
+        # 要約用に翻訳テキストを蓄積
+        self._recent_entries.append(f"{ts} {translated}")
+
+    def flush_recent(self) -> list[str]:
+        """前回の要約以降に蓄積されたテキストを返し、バッファをクリアする."""
+        entries = self._recent_entries.copy()
+        self._recent_entries.clear()
+        return entries
+
+    def log_summary(self, summary: str) -> None:
+        """要約をログファイルに記録する."""
+        ts = self._elapsed()
+        with self._path.open("a", encoding="utf-8") as f:
+            f.write(f"--- {ts} 要約 ---\n")
+            f.write(f"{summary}\n")
+            f.write("---\n\n")

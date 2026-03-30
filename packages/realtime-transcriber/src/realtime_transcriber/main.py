@@ -17,6 +17,7 @@ import mlx_whisper
 
 from realtime_transcriber.audio import AudioCapture
 from realtime_transcriber.session_logger import SessionLogger
+from realtime_transcriber.summarizer import Summarizer
 from realtime_transcriber.transcriber import is_hallucination, transcribe_audio
 from realtime_transcriber.translator import create_translate_client, translate_text
 
@@ -150,6 +151,8 @@ def main() -> None:
     _check_audio_output()
     translate_client = create_translate_client()
     session_logger = SessionLogger()
+    summarizer = Summarizer(session_logger)
+    summarizer.start()
     print(f"Log: {session_logger.path}")
     prev_text = ""
     pending_audio: np.ndarray | None = None
@@ -195,4 +198,4 @@ def main() -> None:
                 translated = _translate_sentences(sentences, translate_client)
                 _print_results(sentences, translated, session_logger)
         except KeyboardInterrupt:
-            pass
+            summarizer.stop()
