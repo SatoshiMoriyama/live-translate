@@ -18,9 +18,10 @@ class SessionLogger:
     def __init__(self) -> None:
         _LOGS_DIR.mkdir(exist_ok=True)
         self._start_time = datetime.now()
-        filename = self._start_time.strftime("%Y-%m-%d_%H%M%S.log")
+        # ミリ秒まで含めてファイル名の衝突を防ぐ
+        filename = self._start_time.strftime("%Y-%m-%d_%H%M%S_%f.log")
         self._path = _LOGS_DIR / filename
-        # ヘッダーを書き込む
+        # 万が一同名ファイルが存在しても追記ではなく新規作成する
         self._path.write_text(
             f"# Session started at {self._start_time.strftime('%Y-%m-%d %H:%M:%S')}\n\n",
             encoding="utf-8",
