@@ -2,8 +2,11 @@
 
 Amazon Bedrock（Claude Haiku 4.5）を使い、セッションの内容を定期的に要約する。
 「前回の要約 + 直近の新テキスト」から更新要約を生成する方式。
+日本語要約（表示・ログ用）と英語キーワード要約（Whisper initial_prompt用）を
+1回のAPI呼び出しで同時に生成する。
 """
 
+import json
 import logging
 import threading
 import time
@@ -18,26 +21,30 @@ MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 SUMMARY_INTERVAL_SECONDS = 60
 
 
-def _build_prompt(prev_summary: str, recent_texts: list[str]) -> str:
-    """要約リクエスト用のプロンプトを組み立てる."""
+def _build_prompt(prev_summary_ja: str, recent_texts: list[str]) -> str:
+    """要約リクエスト用のプロンプトを組み立てる.
+
+    1回のAPI呼び出しで日本語要約と英語キーワード要約を同時に生成する。
+    """
     recent_block = "\n".join(recent_texts)
 
-    if prev_summary:
-        return (
-            "あなたはリアルタイム翻訳セッションの要約アシスタントです。\n"
-            "以下の「これまでの要約」と「直近の発話内容」を踏まえて、"
-            "セッション全体の要約を日本語で更新してください。\n"
-            "箇条書きで、重要なポイントを簡潔にまとめてください。\n\n"
-            f"## これまでの要約\n{prev_summary}\n\n"
-            f"## 直近の発話内容\n{recent_block}\n\n"
-            "## 更新された要約"
-        )
+    context_section = ""
+    if prev_summary_ja:
+        context_section = f"## これまでの要約\n{prev_summary_ja}\n\n"
+
     return (
         "あなたはリアルタイム翻訳セッションの要約アシスタントです。\n"
-        "以下の発話内容を日本語で要約してください。\n"
-        "箇条書きで、重要なポイントを簡潔にまとめてください。\n\n"
-        f"## 発話内容\n{recent_block}\n\n"
-        "## 要約"
+        f"{context_section}"
+        f"## 直近の発話内容\n{recent_block}\n\n"
+        "上記を踏まえて、以下のJSON形式で出力してください。他のテキストは不要です。\n\n"
+        "```json\n"
+        "{\n"
+        '  "summary_ja": "セッション全体の日本語要約（箇条書き）",\n'
+        '  "prompt_en": "English keyword summary of the session topics, '
+        "key terms, speaker names, and technical vocabulary. "
+        'Under 400 characters. No markdown, plain text only."\n'
+        "}\n"
+        "```"
     )
 
 
@@ -46,9 +53,32 @@ def _invoke_bedrock(client: object, prompt: str) -> str:
     response = client.converse(
         modelId=MODEL_ID,
         messages=[{"role": "user", "content": [{"text": prompt}]}],
-        inferenceConfig={"maxTokens": 512, "temperature": 0.3},
+        inferenceConfig={"maxTokens": 1024, "temperature": 0.3},
     )
     return response["output"]["message"]["content"][0]["text"]
+
+
+def _parse_response(raw: str) -> tuple[str, str]:
+    """Bedrockのレスポンスからsummary_jaとprompt_enを抽出する.
+
+    Returns:
+        (summary_ja, prompt_en) のタプル。パース失敗時はrawをsummary_jaとして返す。
+    """
+    # ```json ... ``` ブロックの中身を抽出
+    text = raw.strip()
+    if "```" in text:
+        # コードブロック内のJSONを抽出
+        start = text.find("{")
+        end = text.rfind("}") + 1
+        if start >= 0 and end > start:
+            text = text[start:end]
+
+    try:
+        data = json.loads(text)
+        return data.get("summary_ja", ""), data.get("prompt_en", "")
+    except (json.JSONDecodeError, AttributeError):
+        logger.warning("Failed to parse summary JSON, using raw text")
+        return raw, ""
 
 
 class Summarizer:
@@ -60,7 +90,8 @@ class Summarizer:
     def __init__(self, session_logger: object) -> None:
         self._session_logger = session_logger
         self._client = boto3.client("bedrock-runtime", region_name=BEDROCK_REGION)
-        self._prev_summary = ""
+        self._prev_summary_ja = ""
+        self._prompt_en = ""
         self._lock = threading.Lock()
         self._running = False
         self._thread: threading.Thread | None = None
@@ -73,9 +104,15 @@ class Summarizer:
 
     @property
     def latest_summary(self) -> str:
-        """最新の要約テキストを返す（スレッドセーフ）."""
+        """最新の日本語要約を返す（スレッドセーフ）."""
         with self._lock:
-            return self._prev_summary
+            return self._prev_summary_ja
+
+    @property
+    def whisper_hint(self) -> str:
+        """Whisper initial_prompt 用の英語キーワード要約を返す（スレッドセーフ）."""
+        with self._lock:
+            return self._prompt_en
 
     def stop(self) -> None:
         """要約ワーカーを停止する."""
@@ -95,19 +132,23 @@ class Summarizer:
         if not recent:
             return
 
-        prompt = _build_prompt(self._prev_summary, recent)
+        prompt = _build_prompt(self._prev_summary_ja, recent)
         try:
-            summary = _invoke_bedrock(self._client, prompt)
+            raw = _invoke_bedrock(self._client, prompt)
         except Exception:
             logger.exception("Summary generation failed")
             return
 
+        summary_ja, prompt_en = _parse_response(raw)
+
         with self._lock:
-            self._prev_summary = summary
-        self._session_logger.log_summary(summary)
+            self._prev_summary_ja = summary_ja
+            if prompt_en:
+                self._prompt_en = prompt_en[:400]
+        self._session_logger.log_summary(summary_ja)
 
         # ターミナルに要約を表示
         print("\n\033[96m--- 要約 ---\033[0m", flush=True)
-        for line in summary.strip().splitlines():
+        for line in summary_ja.strip().splitlines():
             print(f"\033[96m{line}\033[0m", flush=True)
         print("\033[96m---\033[0m\n", flush=True)
