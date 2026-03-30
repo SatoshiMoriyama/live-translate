@@ -69,7 +69,6 @@ def main() -> None:
                     pending_audio = None
 
                 duration = len(chunk) / SAMPLE_RATE
-                print(f"[VAD] Speech detected ({duration:.1f}s)", flush=True)
 
                 text = transcribe_audio(
                     audio=chunk,
