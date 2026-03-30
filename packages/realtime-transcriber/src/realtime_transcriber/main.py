@@ -27,7 +27,12 @@ MAX_PENDING_SECONDS = 15
 def _is_sentence_end(text: str) -> bool:
     """テキストが文末（. ! ? など）で終わっているか判定する."""
     stripped = text.rstrip()
-    return stripped != "" and stripped[-1] in ".!?;\""
+    if not stripped:
+        return False
+    # "..." は省略記号なので文末とみなさない
+    if stripped.endswith("..."):
+        return False
+    return stripped[-1] in ".!?;\""
 
 
 def _split_sentences(text: str) -> list[str]:
@@ -92,8 +97,17 @@ def main() -> None:
                     print(f"\033[90m  ... {text}\033[0m", flush=True)
                     continue
 
-                prev_text = text[-200:]
+                # 直近の完全な文をコンテキストとして保持（文の途中で切れないように）
                 sentences = _split_sentences(text)
+                # 末尾から200文字以内に収まる文を取得
+                context_parts: list[str] = []
+                char_count = 0
+                for s in reversed(sentences):
+                    if char_count + len(s) > 200:
+                        break
+                    context_parts.append(s)
+                    char_count += len(s)
+                prev_text = " ".join(reversed(context_parts))
                 for sentence in sentences:
                     ja_text = translate_text(
                         text=sentence,
