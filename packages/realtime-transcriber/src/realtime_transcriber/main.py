@@ -137,10 +137,11 @@ def _print_results(
     translated: list[str],
     session_logger: SessionLogger,
 ) -> None:
-    """原文（グレー）と翻訳文を1文ずつ表示し、ログに記録する."""
+    """原文（グレー）と翻訳文を経過時間付きで表示し、ログに記録する."""
+    ts = session_logger.elapsed()
     for sentence, ja_text in zip(sentences, translated):
-        print(f"{_DIM}  {sentence}{_RESET}", flush=True)
-        print(f"  {ja_text}", flush=True)
+        print(f"{_DIM}  {ts} {sentence}{_RESET}", flush=True)
+        print(f"  {ts} {ja_text}", flush=True)
         session_logger.log(sentence, ja_text)
     print("", flush=True)
 

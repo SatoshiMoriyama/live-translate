@@ -34,7 +34,7 @@ class SessionLogger:
         """ログファイルのパスを返す."""
         return self._path
 
-    def _elapsed(self) -> str:
+    def elapsed(self) -> str:
         """セッション開始からの経過時間を [MM:SS] 形式で返す."""
         delta = datetime.now() - self._start_time
         total_seconds = int(delta.total_seconds())
@@ -43,7 +43,7 @@ class SessionLogger:
 
     def log(self, sentence: str, translated: str) -> None:
         """原文と翻訳文を1エントリとして記録する."""
-        ts = self._elapsed()
+        ts = self.elapsed()
         with self._path.open("a", encoding="utf-8") as f:
             f.write(f"{ts} {sentence}\n")
             f.write(f"{ts} {translated}\n\n")
@@ -58,7 +58,7 @@ class SessionLogger:
 
     def log_summary(self, summary: str) -> None:
         """要約をログファイルに記録する."""
-        ts = self._elapsed()
+        ts = self.elapsed()
         with self._path.open("a", encoding="utf-8") as f:
             f.write(f"--- {ts} 要約 ---\n")
             f.write(f"{summary}\n")
