@@ -33,13 +33,15 @@ def _build_prompt(prev_summary_ja: str, recent_texts: list[str]) -> str:
         context_section = f"## これまでの要約\n{prev_summary_ja}\n\n"
 
     return (
-        "あなたはリアルタイム翻訳セッションの要約アシスタントです。\n"
+        "あなたはリアルタイム英語セッションを聴いている日本人向けの要約アシスタントです。\n"
         f"{context_section}"
         f"## 直近の発話内容\n{recent_block}\n\n"
         "上記を踏まえて、以下のJSON形式で出力してください。他のテキストは不要です。\n\n"
         "```json\n"
         "{\n"
-        '  "summary_ja": "セッション全体の日本語要約（箇条書き）",\n'
+        '  "summary_ja": "セッション全体の要約を日本語の自然な文章で記述してください。'
+        "英語圏特有の表現・固有名詞・略語は日本語話者にわかりやすく補足してください。"
+        '3〜5文程度でまとめてください。",\n'
         '  "prompt_en": "English keyword summary of the session topics, '
         "key terms, speaker names, and technical vocabulary. "
         'Under 400 characters. No markdown, plain text only."\n'
