@@ -184,12 +184,14 @@ def main() -> None:
                 else:
                     initial_prompt = whisper_hint or prev_text or None
 
+                print(f"\r\033[93m⏳ Transcribing...\033[0m", end="", flush=True)
                 text = transcribe_audio(
                     audio=chunk,
                     language=LANGUAGE,
                     mlx_whisper_module=mlx_whisper,
                     initial_prompt=initial_prompt,
                 )
+                print(_CLEAR_LINE, end="", flush=True)
                 if not text or is_hallucination(text):
                     continue
 
@@ -203,7 +205,9 @@ def main() -> None:
                 print(_CLEAR_LINE, end="", flush=True)
                 sentences = _split_sentences(text)
                 prev_text = _build_context(sentences)
+                print(f"\r\033[93m⏳ Translating...\033[0m", end="", flush=True)
                 translated = _translate_sentences(sentences, translate_client)
+                print(_CLEAR_LINE, end="", flush=True)
                 _print_results(sentences, translated, session_logger)
         except KeyboardInterrupt:
             summarizer.stop()
