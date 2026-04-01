@@ -45,6 +45,7 @@ def translate_text(
     source_lang: str,
     target_lang: str,
     client: botocore.client.BaseClient,
+    session_context: str = "",
 ) -> str:
     """テキストを翻訳する.
 
@@ -55,12 +56,15 @@ def translate_text(
         source_lang: ソース言語コード（例: "en"）
         target_lang: ターゲット言語コード（例: "ja"）
         client: 翻訳クライアント
+        session_context: セッションの要約（Bedrock翻訳の文脈として使用）
 
     Returns:
         翻訳されたテキスト
     """
     if TRANSLATION_BACKEND == "bedrock":
-        return _translate_with_bedrock(text, source_lang, target_lang, client)
+        return _translate_with_bedrock(
+            text, source_lang, target_lang, client, session_context
+        )
     else:
         return _translate_with_aws_translate(text, source_lang, target_lang, client)
 
@@ -70,14 +74,24 @@ def _translate_with_bedrock(
     source_lang: str,
     target_lang: str,
     client: botocore.client.BaseClient,
+    session_context: str = "",
 ) -> str:
-    """Bedrock（Claude Haiku 4.5）でテキストを翻訳する."""
+    """Bedrockでテキストを翻訳する."""
+    context_section = ""
+    if session_context:
+        context_section = (
+            f"\n[Context for reference only - DO NOT include in output]: "
+            f"{session_context}\n"
+        )
     prompt = (
         f"Translate the following {source_lang} text to natural {target_lang}. "
         "Translate so that it is easy for Japanese speakers to understand. "
         "For technical terms that are commonly used in English (e.g. AWS, API), "
-        "keep them in English. Output only the translation, nothing else.\n\n"
-        f"{text}"
+        "keep them in English. "
+        "IMPORTANT: Output ONLY the translated text. "
+        "Do not add explanations, context, or commentary.\n"
+        f"{context_section}\n"
+        f"Text to translate: {text}"
     )
     response = client.converse(
         modelId=BEDROCK_MODEL_ID,

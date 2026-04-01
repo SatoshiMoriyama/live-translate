@@ -104,10 +104,33 @@ def _make_mock_capture(side_effects: list) -> MagicMock:
     return mock
 
 
+class _SyncExecutor:
+    """テスト用の同期実行ThreadPoolExecutor代替."""
+
+    def __init__(self, **kwargs):
+        pass
+
+    def submit(self, fn, *args, **kwargs):
+        """関数を同期的に実行してFutureを返す."""
+        from concurrent.futures import Future
+
+        future = Future()
+        try:
+            result = fn(*args, **kwargs)
+            future.set_result(result)
+        except Exception as e:
+            future.set_exception(e)
+        return future
+
+    def shutdown(self, **kwargs):
+        pass
+
+
 def _patch_main_deps(**overrides):
     """main()の外部依存をまとめてパッチするヘルパー.
 
     デフォルトで _check_audio_output, create_translate_client をモック化する。
+    ThreadPoolExecutorを同期実行に差し替えてテストの確実性を担保する。
     overrides で追加のパッチを指定できる。
     """
     import contextlib
@@ -120,7 +143,14 @@ def _patch_main_deps(**overrides):
         ),
         "Summarizer": patch(
             "realtime_transcriber.main.Summarizer",
-            return_value=MagicMock(),
+            return_value=MagicMock(
+                whisper_hint="",
+                latest_summary="",
+            ),
+        ),
+        "ThreadPoolExecutor": patch(
+            "realtime_transcriber.main.ThreadPoolExecutor",
+            side_effect=lambda **kwargs: _SyncExecutor(**kwargs),
         ),
     }
     patches.update(overrides)

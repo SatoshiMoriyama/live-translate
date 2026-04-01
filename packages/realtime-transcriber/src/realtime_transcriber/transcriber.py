@@ -9,7 +9,9 @@ from types import ModuleType
 import numpy as np
 
 # Apple Silicon向けに最適化されたWhisperモデル
-MODEL_REPO = "mlx-community/whisper-large-v3-turbo"
+# - "mlx-community/whisper-large-v3-turbo"（float16、約1.5GB、高精度）
+# - "mlx-community/whisper-large-v3-turbo-q4"（4bit量子化、約400MB、高速）
+MODEL_REPO = "mlx-community/whisper-large-v3-turbo-q4"
 
 # Whisperが無音や短い音声に対して出力しがちな定型フレーズ
 HALLUCINATION_PATTERNS = frozenset(
@@ -95,6 +97,7 @@ def transcribe_audio(
         path_or_hf_repo=MODEL_REPO,
         language=language,
         initial_prompt=initial_prompt,
+        without_timestamps=True,
     )
     text = result["text"]
     # 繰り返しパターンが含まれていれば除去してから返す
