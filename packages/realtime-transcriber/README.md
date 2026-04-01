@@ -264,7 +264,12 @@ BlackHole 2ch がインストールされていないか、認識されていま
 
 ### 音声が取れない / Recording... が表示されない
 
-macOS のシステム出力が Multi-Output Device に切り替わっていない可能性があります。「システム設定 → サウンド → 出力」で Multi-Output Device（または「複数出力装置」）を選択してください。
+以下を確認してください。
+
+1. macOS のシステム出力が Multi-Output Device に切り替わっているか（「システム設定 → サウンド → 出力」で確認）
+2. ターミナルアプリにマイクのアクセス許可があるか（「システム設定 → プライバシーとセキュリティ → マイク」で Terminal.app や iTerm2 等を許可）
+
+BlackHole はシステム音声をキャプチャしますが、macOS はこれを「マイク入力」として扱うため、アプリにマイク許可が必要です。
 
 ### Bedrock で AccessDeniedException が発生する
 
