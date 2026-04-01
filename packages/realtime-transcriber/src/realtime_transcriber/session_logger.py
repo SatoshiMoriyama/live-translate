@@ -5,6 +5,7 @@
 要約機能のために、前回要約以降のテキストを取得する機能も持つ。
 """
 
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -26,8 +27,9 @@ class SessionLogger:
             f"# Session started at {self._start_time.strftime('%Y-%m-%d %H:%M:%S')}\n\n",
             encoding="utf-8",
         )
-        # 要約用: 前回の要約以降に蓄積された翻訳テキスト
+        # 要約用: 前回の要約以降に蓄積された翻訳テキスト（スレッドセーフ）
         self._recent_entries: list[str] = []
+        self._recent_lock = threading.Lock()
 
     @property
     def path(self) -> Path:
@@ -48,13 +50,15 @@ class SessionLogger:
             f.write(f"{ts} {sentence}\n")
             f.write(f"{ts} {translated}\n\n")
         # 要約用に翻訳テキストを蓄積
-        self._recent_entries.append(f"{ts} {translated}")
+        with self._recent_lock:
+            self._recent_entries.append(f"{ts} {translated}")
 
     def flush_recent(self) -> list[str]:
         """前回の要約以降に蓄積されたテキストを返し、バッファをクリアする."""
-        entries = self._recent_entries.copy()
-        self._recent_entries.clear()
-        return entries
+        with self._recent_lock:
+            entries = self._recent_entries
+            self._recent_entries = []
+            return entries
 
     def log_summary(self, summary: str) -> None:
         """要約をログファイルに記録する."""

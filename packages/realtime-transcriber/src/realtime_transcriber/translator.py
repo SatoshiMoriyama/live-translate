@@ -76,26 +76,26 @@ def _translate_with_bedrock(
     client: botocore.client.BaseClient,
     session_context: str = "",
 ) -> str:
-    """Bedrockでテキストを翻訳する."""
-    context_section = ""
-    if session_context:
-        context_section = (
-            f"\n[Context for reference only - DO NOT include in output]: "
-            f"{session_context}\n"
-        )
-    prompt = (
+    """Bedrockでテキストを翻訳する.
+
+    systemフィールドに翻訳指示を分離し、userロールには翻訳対象テキストのみを渡す。
+    """
+    system_prompt = (
         f"Translate the following {source_lang} text to natural {target_lang}. "
         "Translate so that it is easy for Japanese speakers to understand. "
         "For technical terms that are commonly used in English (e.g. AWS, API), "
         "keep them in English. "
-        "IMPORTANT: Output ONLY the translated text. "
-        "Do not add explanations, context, or commentary.\n"
-        f"{context_section}\n"
-        f"Text to translate: {text}"
+        "Output ONLY the translated text. "
+        "Do not add explanations, context, or commentary."
     )
+    if session_context:
+        system_prompt += (
+            f"\n\nSession context for reference: {session_context}"
+        )
     response = client.converse(
         modelId=BEDROCK_MODEL_ID,
-        messages=[{"role": "user", "content": [{"text": prompt}]}],
+        system=[{"text": system_prompt}],
+        messages=[{"role": "user", "content": [{"text": text}]}],
         inferenceConfig={"maxTokens": 512, "temperature": 0.1},
     )
     return response["output"]["message"]["content"][0]["text"].strip()

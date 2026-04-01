@@ -110,6 +110,12 @@ class _SyncExecutor:
     def __init__(self, **kwargs):
         pass
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        pass
+
     def submit(self, fn, *args, **kwargs):
         """関数を同期的に実行してFutureを返す."""
         from concurrent.futures import Future
@@ -121,6 +127,10 @@ class _SyncExecutor:
         except Exception as e:
             future.set_exception(e)
         return future
+
+    def map(self, fn, *iterables):
+        """関数を同期的にmapして結果を返す."""
+        return [fn(*args) for args in zip(*iterables)]
 
     def shutdown(self, **kwargs):
         pass
