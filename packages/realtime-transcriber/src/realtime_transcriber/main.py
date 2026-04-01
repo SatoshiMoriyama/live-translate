@@ -216,6 +216,8 @@ def main() -> None:
     # Whisper処理用のスレッドプール（1ワーカー = 順序を保証しつつメインループを非ブロック化）
     executor = ThreadPoolExecutor(max_workers=1)
     active_future: Future | None = None
+    # ワーカー処理中に完了した発話チャンクを保持するバッファ
+    queued_chunk: np.ndarray | None = None
 
     with AudioCapture(
         device_name=DEVICE_NAME,
@@ -226,7 +228,10 @@ def main() -> None:
             while True:
                 # 前回のワーカーが処理中なら音声キャプチャだけ続ける
                 if active_future is not None and not active_future.done():
-                    capture.get_audio_chunk()  # キューを消費してバッファに蓄積
+                    # 発話が完了したチャンクを保持（次のワーカーで処理する）
+                    result = capture.get_audio_chunk()
+                    if result is not None and queued_chunk is None:
+                        queued_chunk = result
                     time.sleep(SLEEP_SECONDS)
                     continue
 
@@ -237,7 +242,12 @@ def main() -> None:
                         logger.exception("Processing failed", exc_info=exc)
                     active_future = None
 
-                chunk = capture.get_audio_chunk()
+                # ワーカー処理中に溜まったチャンクを優先的に処理
+                if queued_chunk is not None:
+                    chunk = queued_chunk
+                    queued_chunk = None
+                else:
+                    chunk = capture.get_audio_chunk()
                 if chunk is None:
                     time.sleep(SLEEP_SECONDS)
                     continue
