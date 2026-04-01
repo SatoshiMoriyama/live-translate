@@ -8,6 +8,7 @@ import logging
 import re
 import subprocess
 import time
+from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor
 
 import numpy as np
@@ -178,6 +179,7 @@ def _process_chunk(
     )
     print(_CLEAR_LINE, end="", flush=True)
     if not text or is_hallucination(text):
+        context["prev_text"] = ""
         return
 
     duration = len(chunk) / SAMPLE_RATE
@@ -217,7 +219,7 @@ def main() -> None:
     executor = ThreadPoolExecutor(max_workers=1)
     active_future: Future | None = None
     # ワーカー処理中に完了した発話チャンクを保持するバッファ
-    queued_chunk: np.ndarray | None = None
+    queued_chunks: deque[np.ndarray] = deque()
 
     with AudioCapture(
         device_name=DEVICE_NAME,
@@ -230,8 +232,8 @@ def main() -> None:
                 if active_future is not None and not active_future.done():
                     # 発話が完了したチャンクを保持（次のワーカーで処理する）
                     result = capture.get_audio_chunk()
-                    if result is not None and queued_chunk is None:
-                        queued_chunk = result
+                    if result is not None:
+                        queued_chunks.append(result)
                     time.sleep(SLEEP_SECONDS)
                     continue
 
@@ -243,9 +245,8 @@ def main() -> None:
                     active_future = None
 
                 # ワーカー処理中に溜まったチャンクを優先的に処理
-                if queued_chunk is not None:
-                    chunk = queued_chunk
-                    queued_chunk = None
+                if queued_chunks:
+                    chunk = queued_chunks.popleft()
                 else:
                     chunk = capture.get_audio_chunk()
                 if chunk is None:

@@ -9,6 +9,7 @@ import logging
 
 import boto3
 import botocore.client
+from botocore.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,9 @@ BEDROCK_REGION = "us-east-1"
 # - Amazon Nova Micro: "us.amazon.nova-micro-v1:0"（最速、最安、短文向き）
 BEDROCK_MODEL_ID = "us.amazon.nova-pro-v1:0"
 
+# Bedrock リトライ設定
+_BEDROCK_CONFIG = Config(retries={"max_attempts": 5, "mode": "adaptive"})
+
 # AWS Translate設定
 AWS_TRANSLATE_REGION = "ap-northeast-1"
 
@@ -35,7 +39,9 @@ def create_translate_client() -> botocore.client.BaseClient:
     TRANSLATION_BACKEND に応じて Bedrock または AWS Translate のクライアントを返す。
     """
     if TRANSLATION_BACKEND == "bedrock":
-        return boto3.client("bedrock-runtime", region_name=BEDROCK_REGION)
+        return boto3.client(
+            "bedrock-runtime", region_name=BEDROCK_REGION, config=_BEDROCK_CONFIG
+        )
     else:
         return boto3.client("translate", region_name=AWS_TRANSLATE_REGION)
 

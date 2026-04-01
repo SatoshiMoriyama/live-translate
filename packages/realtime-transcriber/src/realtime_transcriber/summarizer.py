@@ -11,6 +11,7 @@ import logging
 import threading
 
 import boto3
+from botocore.config import Config
 
 from realtime_transcriber.session_logger import SessionLogger
 from realtime_transcriber.translator import BEDROCK_REGION
@@ -95,7 +96,11 @@ class Summarizer:
 
     def __init__(self, session_logger: SessionLogger) -> None:
         self._session_logger = session_logger
-        self._client = boto3.client("bedrock-runtime", region_name=BEDROCK_REGION)
+        self._client = boto3.client(
+            "bedrock-runtime",
+            region_name=BEDROCK_REGION,
+            config=Config(retries={"max_attempts": 5, "mode": "adaptive"}),
+        )
         self._prev_summary_ja = ""
         self._prompt_en = ""
         self._lock = threading.Lock()
