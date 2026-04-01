@@ -1,15 +1,43 @@
 """翻訳モジュール.
 
-AWS Translateによる英日翻訳を担当する。
+Amazon BedrockまたはAWS Translateによる英日翻訳を担当する。
+TRANSLATION_BACKEND で切り替え可能。デフォルトは "bedrock"。
+Bedrockの場合、BEDROCK_MODEL_ID でモデルを指定できる。
 """
+
+import logging
 
 import boto3
 import botocore.client
 
+logger = logging.getLogger(__name__)
 
-def create_translate_client(region: str = "ap-northeast-1") -> botocore.client.BaseClient:
-    """AWS Translateクライアントを生成する."""
-    return boto3.client("translate", region_name=region)
+# --- 翻訳設定 ---
+# 翻訳バックエンド: "bedrock" または "aws_translate"
+TRANSLATION_BACKEND = "bedrock"
+
+# Bedrock設定
+BEDROCK_REGION = "us-east-1"
+# 使用するBedrockモデル（クロスリージョン推論プロファイル）
+# - Amazon Nova Pro:   "us.amazon.nova-pro-v1:0"（デフォルト、高品質・高速・低コスト）
+# - Claude Haiku 4.5:  "us.anthropic.claude-haiku-4-5-20251001-v1:0"（高品質、Nova Proより高価）
+# - Amazon Nova Lite:  "us.amazon.nova-lite-v1:0"（高速、低コスト、品質はやや劣る）
+# - Amazon Nova Micro: "us.amazon.nova-micro-v1:0"（最速、最安、短文向き）
+BEDROCK_MODEL_ID = "us.amazon.nova-pro-v1:0"
+
+# AWS Translate設定
+AWS_TRANSLATE_REGION = "ap-northeast-1"
+
+
+def create_translate_client() -> botocore.client.BaseClient:
+    """翻訳クライアントを生成する.
+
+    TRANSLATION_BACKEND に応じて Bedrock または AWS Translate のクライアントを返す。
+    """
+    if TRANSLATION_BACKEND == "bedrock":
+        return boto3.client("bedrock-runtime", region_name=BEDROCK_REGION)
+    else:
+        return boto3.client("translate", region_name=AWS_TRANSLATE_REGION)
 
 
 def translate_text(
@@ -18,17 +46,54 @@ def translate_text(
     target_lang: str,
     client: botocore.client.BaseClient,
 ) -> str:
-    """AWS Translateでテキストを翻訳する.
+    """テキストを翻訳する.
+
+    TRANSLATION_BACKEND に応じて Bedrock または AWS Translate を使用する。
 
     Args:
         text: 翻訳元テキスト
         source_lang: ソース言語コード（例: "en"）
         target_lang: ターゲット言語コード（例: "ja"）
-        client: AWS Translateクライアント
+        client: 翻訳クライアント
 
     Returns:
         翻訳されたテキスト
     """
+    if TRANSLATION_BACKEND == "bedrock":
+        return _translate_with_bedrock(text, source_lang, target_lang, client)
+    else:
+        return _translate_with_aws_translate(text, source_lang, target_lang, client)
+
+
+def _translate_with_bedrock(
+    text: str,
+    source_lang: str,
+    target_lang: str,
+    client: botocore.client.BaseClient,
+) -> str:
+    """Bedrock（Claude Haiku 4.5）でテキストを翻訳する."""
+    prompt = (
+        f"Translate the following {source_lang} text to natural {target_lang}. "
+        "Translate so that it is easy for Japanese speakers to understand. "
+        "For technical terms that are commonly used in English (e.g. AWS, API), "
+        "keep them in English. Output only the translation, nothing else.\n\n"
+        f"{text}"
+    )
+    response = client.converse(
+        modelId=BEDROCK_MODEL_ID,
+        messages=[{"role": "user", "content": [{"text": prompt}]}],
+        inferenceConfig={"maxTokens": 512, "temperature": 0.1},
+    )
+    return response["output"]["message"]["content"][0]["text"].strip()
+
+
+def _translate_with_aws_translate(
+    text: str,
+    source_lang: str,
+    target_lang: str,
+    client: botocore.client.BaseClient,
+) -> str:
+    """AWS Translateでテキストを翻訳する."""
     response = client.translate_text(
         Text=text,
         SourceLanguageCode=source_lang,

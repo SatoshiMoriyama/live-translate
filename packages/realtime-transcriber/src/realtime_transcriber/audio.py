@@ -13,7 +13,7 @@ from silero_vad_lite import SileroVAD
 
 # --- VAD設定 ---
 VAD_THRESHOLD = 0.5  # 発話判定の確率しきい値（0.0〜1.0）
-MIN_SILENCE_MS = 800  # 発話終了とみなす無音の長さ（ミリ秒）
+MIN_SILENCE_MS = 700  # 発話終了とみなす無音の長さ（ミリ秒）
 MAX_SPEECH_SECONDS = 30  # 1回の発話として蓄積する最大秒数
 MIN_SPEECH_SECONDS = 1  # これより短い発話はノイズとして無視
 

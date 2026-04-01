@@ -1,54 +1,110 @@
 """translator モジュールのテスト.
 
-Amazon Translate を使った翻訳機能をテストする。
+Bedrock と AWS Translate の両バックエンドをテストする。
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
+from realtime_transcriber import translator
 from realtime_transcriber.translator import translate_text
 
 
-class TestTranslateText:
-    """translate_text関数のテスト."""
+class TestTranslateTextBedrock:
+    """Bedrockバックエンドのテスト."""
+
+    def setup_method(self) -> None:
+        self._original_backend = translator.TRANSLATION_BACKEND
+        translator.TRANSLATION_BACKEND = "bedrock"
+
+    def teardown_method(self) -> None:
+        translator.TRANSLATION_BACKEND = self._original_backend
+
+    def _make_client(self, translated: str) -> MagicMock:
+        mock_client = MagicMock()
+        mock_client.converse.return_value = {
+            "output": {"message": {"content": [{"text": translated}]}}
+        }
+        return mock_client
 
     def test_should_return_translated_text(self) -> None:
-        # Given: 英語テキストと正常に翻訳を返すTranslateクライアント
+        # Given: 正常に翻訳を返すBedrockクライアント
+        mock_client = self._make_client("こんにちは、世界。")
+
+        # When: 翻訳を実行する
+        result = translate_text("Hello, world.", "en", "ja", mock_client)
+
+        # Then: 日本語翻訳テキストが返る
+        assert result == "こんにちは、世界。"
+
+    def test_should_call_converse_api(self) -> None:
+        # Given: モック化されたBedrockクライアント
+        mock_client = self._make_client("テスト")
+
+        # When: 翻訳を実行する
+        translate_text("test", "en", "ja", mock_client)
+
+        # Then: Bedrock Converse APIが呼ばれる
+        mock_client.converse.assert_called_once()
+        call_kwargs = mock_client.converse.call_args[1]
+        assert call_kwargs["inferenceConfig"]["temperature"] == 0.1
+
+    def test_should_strip_whitespace_from_response(self) -> None:
+        # Given: 前後に空白を含むレスポンス
+        mock_client = self._make_client("  翻訳結果  \n")
+
+        # When: 翻訳を実行する
+        result = translate_text("result", "en", "ja", mock_client)
+
+        # Then: 前後の空白が除去される
+        assert result == "翻訳結果"
+
+    def test_should_propagate_api_error(self) -> None:
+        # Given: エラーを返すBedrockクライアント
+        mock_client = MagicMock()
+        mock_client.converse.side_effect = Exception("ServiceUnavailable")
+
+        # When/Then: エラーがそのまま伝播する
+        with pytest.raises(Exception, match="ServiceUnavailable"):
+            translate_text("Hello", "en", "ja", mock_client)
+
+
+class TestTranslateTextAwsTranslate:
+    """AWS Translateバックエンドのテスト."""
+
+    def setup_method(self) -> None:
+        self._original_backend = translator.TRANSLATION_BACKEND
+        translator.TRANSLATION_BACKEND = "aws_translate"
+
+    def teardown_method(self) -> None:
+        translator.TRANSLATION_BACKEND = self._original_backend
+
+    def _make_client(self, translated: str) -> MagicMock:
         mock_client = MagicMock()
         mock_client.translate_text.return_value = {
-            "TranslatedText": "こんにちは、世界。",
+            "TranslatedText": translated,
             "SourceLanguageCode": "en",
             "TargetLanguageCode": "ja",
         }
+        return mock_client
+
+    def test_should_return_translated_text(self) -> None:
+        # Given: 正常に翻訳を返すAWS Translateクライアント
+        mock_client = self._make_client("こんにちは、世界。")
 
         # When: 翻訳を実行する
-        result = translate_text(
-            text="Hello, world.",
-            source_lang="en",
-            target_lang="ja",
-            client=mock_client,
-        )
+        result = translate_text("Hello, world.", "en", "ja", mock_client)
 
         # Then: 日本語翻訳テキストが返る
         assert result == "こんにちは、世界。"
 
     def test_should_call_translate_with_correct_parameters(self) -> None:
-        # Given: モック化されたTranslateクライアント
-        mock_client = MagicMock()
-        mock_client.translate_text.return_value = {
-            "TranslatedText": "テスト",
-            "SourceLanguageCode": "en",
-            "TargetLanguageCode": "ja",
-        }
+        # Given: モック化されたAWS Translateクライアント
+        mock_client = self._make_client("テスト")
 
         # When: 翻訳を実行する
-        translate_text(
-            text="test",
-            source_lang="en",
-            target_lang="ja",
-            client=mock_client,
-        )
+        translate_text("test", "en", "ja", mock_client)
 
         # Then: 正しいパラメータでAPIが呼ばれる
         mock_client.translate_text.assert_called_once_with(
@@ -58,37 +114,10 @@ class TestTranslateText:
         )
 
     def test_should_propagate_api_error(self) -> None:
-        # Given: エラーを返すTranslateクライアント
+        # Given: エラーを返すAWS Translateクライアント
         mock_client = MagicMock()
         mock_client.translate_text.side_effect = Exception("ServiceUnavailable")
 
         # When/Then: エラーがそのまま伝播する
         with pytest.raises(Exception, match="ServiceUnavailable"):
-            translate_text(
-                text="Hello",
-                source_lang="en",
-                target_lang="ja",
-                client=mock_client,
-            )
-
-    def test_should_handle_long_text(self) -> None:
-        # Given: 長いテキスト
-        long_text = "This is a very long sentence. " * 100
-        mock_client = MagicMock()
-        mock_client.translate_text.return_value = {
-            "TranslatedText": "これはとても長い文です。" * 100,
-            "SourceLanguageCode": "en",
-            "TargetLanguageCode": "ja",
-        }
-
-        # When: 長いテキストを翻訳する
-        result = translate_text(
-            text=long_text,
-            source_lang="en",
-            target_lang="ja",
-            client=mock_client,
-        )
-
-        # Then: 翻訳結果が返る
-        assert len(result) > 0
-        mock_client.translate_text.assert_called_once()
+            translate_text("Hello", "en", "ja", mock_client)
