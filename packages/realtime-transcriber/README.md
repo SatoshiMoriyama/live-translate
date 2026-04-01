@@ -32,7 +32,7 @@ BlackHole 2ch 経由でキャプチャした音声を MLX-Whisper（`mlx-communi
 - Python 3.11〜3.13
 - [uv](https://docs.astral.sh/uv/) （パッケージ管理）
 - [BlackHole 2ch](https://existential.audio/blackhole/) （仮想オーディオデバイス）
-- macOS の「Audio MIDI 設定」で Multi-Output Device を作成済み（後述）
+- macOS の「Audio MIDI 設定」で Multi-Output Device（複数出力装置） を作成済み（後述）
 - AWS CLI で SSO ログイン済み（後述）
 - Amazon Bedrock で以下のモデルアクセスが有効（us-east-1 リージョン）
   - Amazon Nova Pro（翻訳用、デフォルト）
@@ -40,9 +40,9 @@ BlackHole 2ch 経由でキャプチャした音声を MLX-Whisper（`mlx-communi
 
 ## セットアップ
 
-### 1. Multi-Output Device の作成
+### 1. Multi-Output Device（複数出力装置） の作成
 
-BlackHole 2ch をインストールしたら、macOS の「Audio MIDI 設定」で Multi-Output Device を作成します。
+BlackHole 2ch をインストールしたら、macOS の「Audio MIDI 設定」で Multi-Output Device（複数出力装置） を作成します。
 
 1. 「Audio MIDI 設定」を開く（Spotlight で「Audio MIDI」と検索）
 2. 左下の「+」ボタン →「複数出力装置を作成」
@@ -60,17 +60,13 @@ uv sync
 
 ### 3. AWS の設定
 
-Bedrock のモデルアクセスは us-east-1 リージョンで有効化してください（クロスリージョン推論プロファイルを使用するため）。翻訳に AWS Translate を使う場合は ap-northeast-1 も必要です。
+Bedrock のモデルアクセスは us-east-1 リージョンで有効化してください（クロスリージョン推論プロファイルを使用するため）。
 
 ```bash
-# 使用する AWS プロファイルを設定
-export AWS_PROFILE=your-profile-name
-
-# SSO ログイン
 aws sso login
 ```
 
-ターミナルで `AWS_PROFILE` を設定してからアプリを起動してください。`~/.aws/config` でデフォルトプロファイルを設定している場合は `export` は不要です。
+`~/.aws/config` のデフォルトプロファイルに Bedrock へのアクセス権限を持つ SSO 設定を入れておいてください。デフォルト以外のプロファイルを使う場合は、アプリ起動前に `export AWS_PROFILE=your-profile-name` を実行してください。
 
 ## 使い方
 
@@ -78,7 +74,7 @@ aws sso login
 uv run realtime-transcriber
 ```
 
-起動すると音声出力先の確認が行われます。Multi-Output Device に切り替えた後、Enter を押すと文字起こしが開始されます。
+起動すると音声出力先の確認が行われます。Multi-Output Device（複数出力装置） に切り替えた後、Enter を押すと文字起こしが開始されます。
 
 ログファイルは `logs/` ディレクトリにセッションごとに生成されます。
 
@@ -87,16 +83,22 @@ uv run realtime-transcriber
 ## 出力例
 
 ```
-● Recording... 3s
-  [00:12] Hope you all had a great time at re:Invent so far!
-  [00:12] これまでのre:Inventで素晴らしい時間を過ごしたことを願っています!
+● Recording... 5s
+  [00:21] We're driven by the idea that the products and services we create
+          should help people unleash their creativity and potential.
+  [00:21] 私たちは、私たちが作る製品やサービスが人々の創造性と可能性を
+          引き出す手助けをするべきだという考えに導かれています。
 
-  [00:18] Raise your hand if you ever been paged at midnight.
-  [00:18] 真夜中にページングされたことがある方は手を挙げてください。
+  [00:27] We build some of the largest internet services on the planet
+          and many of them run on AWS.
+  [00:27] 私たちは世界最大級のインターネットサービスの一部を構築しており、
+          それらの多くはAWS上で稼働しています。
 
 --- 要約 ---
-• re:Inventセッション。インシデント対応における「コンテキスト麻痺」の問題を提起
-• データは溢れているが文脈がないため、MTTRの改善にはMTTCが重要と主張
+ペイアム・ウラシディ氏が登壇し、Appleのクラウドインフラストラクチャ戦略に
+ついて説明しました。同氏のチームはApp Store、Apple Music、Apple TV、
+Podcastsなど、数十億人が利用する主要サービスを開発・運営しており、これらは
+AWSと自社データセンターの両方で稼働しています。
 ---
 ```
 
@@ -266,7 +268,7 @@ BlackHole 2ch がインストールされていないか、認識されていま
 
 以下を確認してください。
 
-1. macOS のシステム出力が Multi-Output Device に切り替わっているか（「システム設定 → サウンド → 出力」で確認）
+1. macOS のシステム出力が Multi-Output Device（複数出力装置） に切り替わっているか（「システム設定 → サウンド → 出力」で確認）
 2. ターミナルアプリにマイクのアクセス許可があるか（「システム設定 → プライバシーとセキュリティ → マイク」で Terminal.app や iTerm2 等を許可）
 
 BlackHole はシステム音声をキャプチャしますが、macOS はこれを「マイク入力」として扱うため、アプリにマイク許可が必要です。
