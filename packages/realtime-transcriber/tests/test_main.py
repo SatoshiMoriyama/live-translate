@@ -5,6 +5,7 @@
 モジュールを横断するデータフローのため、インテグレーションテストとして記述する。
 """
 
+import argparse
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -146,7 +147,12 @@ def _patch_main_deps(**overrides):
     import contextlib
 
     patches = {
+        "_parse_args": patch(
+            "realtime_transcriber.main._parse_args",
+            return_value=argparse.Namespace(profile=None),
+        ),
         "_check_audio_output": patch("realtime_transcriber.main._check_audio_output"),
+        "_preload_whisper_model": patch("realtime_transcriber.main._preload_whisper_model"),
         "create_translate_client": patch(
             "realtime_transcriber.main.create_translate_client",
             return_value=MagicMock(),

@@ -94,9 +94,12 @@ class Summarizer:
     メインループをブロックしないようにデーモンスレッドで動作する。
     """
 
-    def __init__(self, session_logger: SessionLogger) -> None:
+    def __init__(
+        self, session_logger: SessionLogger, profile: str | None = None
+    ) -> None:
         self._session_logger = session_logger
-        self._client = boto3.client(
+        session = boto3.Session(profile_name=profile)
+        self._client = session.client(
             "bedrock-runtime",
             region_name=BEDROCK_REGION,
             config=Config(retries={"max_attempts": 5, "mode": "adaptive"}),

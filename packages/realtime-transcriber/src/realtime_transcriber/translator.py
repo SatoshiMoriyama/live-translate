@@ -32,17 +32,23 @@ _BEDROCK_CONFIG = Config(retries={"max_attempts": 5, "mode": "adaptive"})
 AWS_TRANSLATE_REGION = "ap-northeast-1"
 
 
-def create_translate_client() -> botocore.client.BaseClient:
+def create_translate_client(
+    profile: str | None = None,
+) -> botocore.client.BaseClient:
     """翻訳クライアントを生成する.
 
     TRANSLATION_BACKEND に応じて Bedrock または AWS Translate のクライアントを返す。
+
+    Args:
+        profile: AWS プロファイル名。None の場合はデフォルトプロファイルを使用。
     """
+    session = boto3.Session(profile_name=profile)
     if TRANSLATION_BACKEND == "bedrock":
-        return boto3.client(
+        return session.client(
             "bedrock-runtime", region_name=BEDROCK_REGION, config=_BEDROCK_CONFIG
         )
     else:
-        return boto3.client("translate", region_name=AWS_TRANSLATE_REGION)
+        return session.client("translate", region_name=AWS_TRANSLATE_REGION)
 
 
 def translate_text(
