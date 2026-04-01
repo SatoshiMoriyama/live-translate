@@ -20,11 +20,12 @@ TRANSLATION_BACKEND = "bedrock"
 # Bedrock設定
 BEDROCK_REGION = "us-east-1"
 # 使用するBedrockモデル（クロスリージョン推論プロファイル）
-# - Amazon Nova Pro:   "us.amazon.nova-pro-v1:0"（デフォルト、高品質・高速・低コスト）
-# - Claude Haiku 4.5:  "us.anthropic.claude-haiku-4-5-20251001-v1:0"（高品質、Nova Proより高価）
-# - Amazon Nova Lite:  "us.amazon.nova-lite-v1:0"（高速、低コスト、品質はやや劣る）
-# - Amazon Nova Micro: "us.amazon.nova-micro-v1:0"（最速、最安、短文向き）
-BEDROCK_MODEL_ID = "us.amazon.nova-pro-v1:0"
+# - Amazon Nova 2 Lite: "us.amazon.nova-2-lite-v1:0"（デフォルト、高品質・高速・低コスト）
+# - Amazon Nova Pro:    "us.amazon.nova-pro-v1:0"（高品質、Nova 2 Liteと同等だがやや高価）
+# - Claude Haiku 4.5:   "us.anthropic.claude-haiku-4-5-20251001-v1:0"（高品質、最も高価）
+# - Amazon Nova Lite:   "us.amazon.nova-lite-v1:0"（高速、低コスト、品質はやや劣る）
+# - Amazon Nova Micro:  "us.amazon.nova-micro-v1:0"（最速、最安、短文向き）
+BEDROCK_MODEL_ID = "us.amazon.nova-2-lite-v1:0"
 
 # Bedrock リトライ設定
 _BEDROCK_CONFIG = Config(retries={"max_attempts": 5, "mode": "adaptive"})
