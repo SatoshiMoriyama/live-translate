@@ -8,6 +8,7 @@ import pytest
 from realtime_transcriber.transcriber import (
     HALLUCINATION_PATTERNS,
     MODEL_REPO,
+    _is_output_too_long,
     is_hallucination,
     transcribe_audio,
 )
@@ -258,3 +259,63 @@ class TestTranscribeAudio:
                 language="en",
                 mlx_whisper_module=mock_mlx_whisper,
             )
+
+    def test_should_return_empty_when_output_too_long_for_audio(self) -> None:
+        # Given: 1秒の音声に対して異常に長いテキストが出力された
+        audio = np.random.rand(16000).astype(np.float32)  # 1秒
+        mock_mlx_whisper = MagicMock()
+        mock_mlx_whisper.transcribe.return_value = {
+            "text": "皆さん、こんにちは！今日はみんなに少し自己紹介してもらいたいと思います。" * 3
+        }
+
+        # When: 文字起こしを実行する
+        result = transcribe_audio(
+            audio=audio,
+            language="en",
+            mlx_whisper_module=mock_mlx_whisper,
+        )
+
+        # Then: 異常な出力として空文字が返る
+        assert result == ""
+
+    def test_should_return_text_when_output_length_is_normal(self) -> None:
+        # Given: 3秒の音声に対して妥当な長さのテキスト
+        audio = np.random.rand(16000 * 3).astype(np.float32)  # 3秒
+        mock_mlx_whisper = MagicMock()
+        mock_mlx_whisper.transcribe.return_value = {
+            "text": "Hello everyone, welcome to today's presentation."
+        }
+
+        # When: 文字起こしを実行する
+        result = transcribe_audio(
+            audio=audio,
+            language="en",
+            mlx_whisper_module=mock_mlx_whisper,
+        )
+
+        # Then: 正常にテキストが返る
+        assert result == "Hello everyone, welcome to today's presentation."
+
+
+class TestIsOutputTooLong:
+    """_is_output_too_long関数のテスト."""
+
+    def test_should_detect_too_long_output(self) -> None:
+        # Given: 1秒の音声に対して100文字の出力（30文字/秒を超過）
+        audio = np.random.rand(16000).astype(np.float32)
+        text = "a" * 100
+
+        # When/Then: 異常と判定される
+        assert _is_output_too_long(text, audio) is True
+
+    def test_should_allow_normal_output(self) -> None:
+        # Given: 3秒の音声に対して50文字の出力（約17文字/秒）
+        audio = np.random.rand(16000 * 3).astype(np.float32)
+        text = "Hello everyone welcome to the presentation."
+
+        # When/Then: 正常と判定される
+        assert _is_output_too_long(text, audio) is False
+
+    def test_should_return_false_when_text_is_empty(self) -> None:
+        audio = np.random.rand(16000).astype(np.float32)
+        assert _is_output_too_long("", audio) is False

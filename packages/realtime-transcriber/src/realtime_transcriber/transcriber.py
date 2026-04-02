@@ -106,6 +106,27 @@ def is_hallucination(text: str) -> bool:
     return False
 
 
+# 1秒あたりの出力文字数の上限（通常の英語発話は15〜20文字/秒程度）
+_MAX_CHARS_PER_SECOND = 30
+# サンプルレート（16kHz）
+_SAMPLE_RATE = 16000
+
+
+def _is_output_too_long(text: str, audio: np.ndarray) -> bool:
+    """音声の長さに対して出力テキストが異常に長いか判定する.
+
+    短い音声から長いテキストが出力された場合、Whisper のハルシネーションや
+    initial_prompt の内容混入の可能性が高い。
+    """
+    if not text:
+        return False
+    duration = len(audio) / _SAMPLE_RATE
+    if duration <= 0:
+        return False
+    chars_per_second = len(text.strip()) / duration
+    return chars_per_second > _MAX_CHARS_PER_SECOND
+
+
 def transcribe_audio(
     audio: np.ndarray,
     language: str,
@@ -115,7 +136,7 @@ def transcribe_audio(
     """音声データを文字起こしする.
 
     Args:
-        audio: モノラルfloat32のnumpy配列
+        audio: モノラルfloat32のnumpy配列（16kHz）
         language: 言語コード（例: "en"）
         mlx_whisper_module: mlx_whisperモジュール（テスト時にモック可能）
         initial_prompt: Whisperへのコンテキストヒント（前回の結果など）
@@ -131,6 +152,9 @@ def transcribe_audio(
         without_timestamps=True,
     )
     text = result["text"]
+    # 音声の長さに対して出力が異常に長い場合はハルシネーションとして破棄
+    if _is_output_too_long(text, audio):
+        return ""
     # 繰り返しパターンが含まれていれば除去してから返す
     if _has_repetition(text):
         text = _clean_repetition(text)
