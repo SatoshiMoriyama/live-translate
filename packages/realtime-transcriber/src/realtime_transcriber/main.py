@@ -316,3 +316,4 @@ def main() -> None:
         except KeyboardInterrupt:
             summarizer.stop()
             executor.shutdown(wait=False)
+            print(f"\nLog: {session_logger.path}")
