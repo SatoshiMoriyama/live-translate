@@ -89,7 +89,7 @@ uv run realtime-transcriber --profile your-profile-name
 ## 出力例
 
 ```
-● Recording... 5s
+● Recording... 5s ▼
   [00:21] We're driven by the idea that the products and services we create
           should help people unleash their creativity and potential.
   [00:21] 私たちは、私たちが作る製品やサービスが人々の創造性と可能性を
@@ -114,7 +114,7 @@ AWSと自社データセンターの両方で稼働しています。
 
 BlackHole 2ch 経由でシステム音声をステレオで取得し、モノラルに変換して Silero VAD に渡します。VAD が発話区間を検出すると音声バッファへの蓄積を開始し、以下の条件で区切ります。
 
-- 500ms 以上の無音が続いた時点で発話終了と判定
+- 無音が一定時間続いた時点で発話終了と判定（初期値 500ms、前回の翻訳結果の文数に応じて 200ms〜800ms の範囲で動的に調整）
 - 発話が 30 秒に達したら強制的に区切り
 - 1 秒未満の発話はノイズとして無視
 
@@ -155,7 +155,7 @@ Whisper が無音や短い音声に対して出力する定型フレーズ（"Th
 
 ターミナルにはリアルタイムで処理状態が表示されます。
 
-- `● Recording... Ns` — VAD が発話を検出し、音声を蓄積中（N は秒数）
+- `● Recording... Ns` — VAD が発話を検出し、音声を蓄積中（N は秒数）。無音閾値が変更された場合は ▼（短縮）/ ▲（延長）が表示される
 - `⏳ Transcribing...` — Whisper が音声を文字起こし中
 - `⏳ Translating...` — 翻訳中
 - `... waiting` — 文が未完結のため、次のチャンクを待機中

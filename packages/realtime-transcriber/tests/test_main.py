@@ -102,6 +102,7 @@ def _make_mock_capture(side_effects: list) -> MagicMock:
     mock.__enter__ = MagicMock(return_value=mock)
     mock.__exit__ = MagicMock(return_value=False)
     mock.get_audio_chunk.side_effect = side_effects
+    mock.adjust_silence.return_value = None
     return mock
 
 

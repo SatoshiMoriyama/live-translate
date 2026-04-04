@@ -168,6 +168,7 @@ def _process_chunk(
     translate_client: object,
     session_logger: SessionLogger,
     summarizer: Summarizer,
+    capture: AudioCapture,
     context: dict,
 ) -> None:
     """1チャンクの文字起こし→翻訳→表示を実行する（ワーカースレッド用）."""
@@ -181,6 +182,9 @@ def _process_chunk(
     print(_CLEAR_LINE, end="", flush=True)
     if not text or is_hallucination(text):
         context["prev_text"] = ""
+        change = capture.adjust_silence(0)
+        if change:
+            session_logger.log_silence_change(*change)
         return
 
     duration = len(chunk) / SAMPLE_RATE
@@ -195,6 +199,9 @@ def _process_chunk(
     print(_CLEAR_LINE, end="", flush=True)
     sentences = _split_sentences(text)
     context["prev_text"] = _build_context(sentences)
+    change = capture.adjust_silence(len(sentences))
+    if change:
+        session_logger.log_silence_change(*change)
     # 要約コンテキストを翻訳に渡してIT文脈の訳し分けを改善
     session_context = summarizer.latest_summary
     print(f"\r{_YELLOW}⏳ Translating...{_RESET}", end="", flush=True)
@@ -311,6 +318,7 @@ def main() -> None:
                     translate_client,
                     session_logger,
                     summarizer,
+                    capture,
                     context,
                 )
         except KeyboardInterrupt:

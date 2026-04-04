@@ -16,7 +16,10 @@ logger = logging.getLogger(__name__)
 
 # --- VAD設定 ---
 VAD_THRESHOLD = 0.5  # 発話判定の確率しきい値（0.0〜1.0）
-MIN_SILENCE_MS = 500  # 発話終了とみなす無音の長さ（ミリ秒）
+MIN_SILENCE_MS = 500  # 発話終了とみなす無音の長さ（ミリ秒）・初期値
+MIN_SILENCE_FLOOR_MS = 200  # 無音閾値の下限（ミリ秒）
+MIN_SILENCE_CEIL_MS = 800  # 無音閾値の上限（ミリ秒）
+SILENCE_STEP_MS = 50  # 1回の調整幅（ミリ秒）
 MAX_SPEECH_SECONDS = 30  # 1回の発話として蓄積する最大秒数
 MIN_SPEECH_SECONDS = 1  # これより短い発話はノイズとして無視
 
@@ -59,7 +62,9 @@ class AudioCapture:
         self._speech_chunks: list[np.ndarray] = []
         self._silence_samples = 0
         self._speech_samples = 0
-        self._min_silence_samples = int(sample_rate * MIN_SILENCE_MS / 1000)
+        self._min_silence_ms = MIN_SILENCE_MS
+        self._min_silence_samples = int(sample_rate * self._min_silence_ms / 1000)
+        self._silence_direction = ""  # 閾値の変化方向（"▲" / "▼" / ""）
         self._max_speech_samples = int(sample_rate * MAX_SPEECH_SECONDS)
         self._min_speech_samples = int(sample_rate * MIN_SPEECH_SECONDS)
         self._last_status = ""
@@ -107,6 +112,43 @@ class AudioCapture:
             return np.mean(audio, axis=1).astype(np.float32)
         return audio.astype(np.float32)
 
+    def adjust_silence(self, sentence_count: int) -> tuple[int, int] | None:
+        """前回の翻訳結果の文数に応じて無音閾値を動的に調整する.
+
+        文が多い → 区切りが遅かった → 閾値を短くする
+        文が少ない → 区切りが早かった → 閾値を長くする
+
+        Returns:
+            変更があった場合は (変更前ms, 変更後ms) のタプル。変更なしなら None。
+        """
+        prev_ms = self._min_silence_ms
+        if sentence_count >= 5:
+            self._min_silence_ms -= SILENCE_STEP_MS * 2
+        elif sentence_count >= 3:
+            self._min_silence_ms -= SILENCE_STEP_MS
+        elif sentence_count <= 0:
+            self._min_silence_ms += SILENCE_STEP_MS
+        # 1〜2文はちょうどいいので変更しない
+
+        self._min_silence_ms = max(
+            MIN_SILENCE_FLOOR_MS, min(MIN_SILENCE_CEIL_MS, self._min_silence_ms)
+        )
+        self._min_silence_samples = int(
+            self.sample_rate * self._min_silence_ms / 1000
+        )
+        logger.debug("Silence threshold: %dms", self._min_silence_ms)
+
+        if self._min_silence_ms < prev_ms:
+            self._silence_direction = " ▼"
+        elif self._min_silence_ms > prev_ms:
+            self._silence_direction = " ▲"
+        else:
+            self._silence_direction = ""
+
+        if self._min_silence_ms != prev_ms:
+            return (prev_ms, self._min_silence_ms)
+        return None
+
     def get_audio_chunk(self) -> np.ndarray | None:
         """VADで発話区間を検出し、発話終了時にまとめて返す.
 
@@ -148,7 +190,7 @@ class AudioCapture:
 
                 # 秒単位で変わった時だけ更新
                 elapsed = int(self._speech_samples / self.sample_rate)
-                status = f"\r\033[93m● Recording... {elapsed}s\033[0m"
+                status = f"\r\033[93m● Recording... {elapsed}s{self._silence_direction}\033[0m"
                 if status != self._last_status:
                     print(status, end="", flush=True)
                     self._last_status = status
